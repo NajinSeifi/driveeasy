@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>drive easy | Book with Ava</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">drive easy</header>
+<main class="shell">
+  <section class="panel left">
+    <div class="ava-head">
+      <div id="avatar" data-mode="idle" aria-label="Ava"><span class="eye l"></span><span class="eye r"></span><span class="mouth"></span></div>
+      <div><b>Ava</b><span id="label">Your rental assistant</span></div>
+    </div>
+    <div class="chat" id="chat" aria-live="polite"></div>
+    <div class="quick" id="quick"></div>
+    <div class="bottom">
+      <div class="composer">
+        <button id="mic" title="Speak to Ava" aria-label="Speak to Ava">🎙</button>
+        <input id="input" type="text" placeholder="Type your answer to Ava..." autocomplete="off">
+        <button id="send">Send</button>
+      </div>
+      <div class="controls">
+        <button id="back">← Back</button>
+        <button id="restart">↻ Restart</button>
+        <button id="pause">Pause voice</button>
+        <button id="repeat">Repeat</button>
+      </div>
+    </div>
+  </section>
+  <aside class="panel right">
+    <h2>Your booking</h2>
+    <div class="bar"><div id="prog"></div></div>
+    <small id="progText" style="color:#7a6f93">0 of 6 done</small>
+    <div id="steps" style="margin-top:8px"></div>
+    <div class="total"><div><b>Estimated total</b><small id="totalNote">Incl. fees &amp; tax</small></div><strong id="total">$0.00</strong></div>
+  </aside>
+</main>
+<script src="script.js"></script>
+</body>
+</html>
