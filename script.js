@@ -31,7 +31,10 @@ const norm=s=>s.toLowerCase().replace(/[–—]/g," ").trim();
 const fixTerms=s=>TERM_FIXES.reduce((v,[pattern,replacement])=>v.replace(pattern,replacement),s);
 
 /* Avatar */
-function mode(m,t){$("avatar").dataset.mode=m;$("label").textContent=t||"Your rental assistant"}
+function mode(m,t){
+  $("avatar").dataset.mode=m;
+  $("label").textContent=t||"Ready";
+}
 let VOICE=null;
 function pickVoice(){
   const vs=speechSynthesis.getVoices().filter(v=>v.lang.startsWith("en"));
@@ -75,9 +78,16 @@ const pad=n=>String(n).padStart(2,"0");
 const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const fmt=v=>v?new Date(v+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"}):"";
 function days(){return S.start&&S.end?Math.max(1,Math.round((new Date(S.end+"T12:00:00")-new Date(S.start+"T12:00:00"))/864e5)):1}
+function addonTotal(dayCount=days()){
+  return S.addons.reduce((sum,id)=>{
+    const addon=ADDONS.find(x=>x.id===id);
+    return sum+(addon?addon.p*dayCount:0);
+  },0);
+}
 function total(){
   if(!S.car)return 0;
-  const d=days(),extras=S.addons.reduce((a,id)=>a+ADDONS.find(x=>x.id===id).p*d,0),sub=S.car.r*d+extras+15;
+  const d=days();
+  const sub=S.car.r*d+addonTotal(d)+15;
   return sub*1.13;
 }
 function priceBreakdown(){
@@ -106,6 +116,106 @@ function priceBreakdown(){
       <div><b>Total: ${money(subtotal+tax)} CAD</b></div>
     </div>
   `;
+}
+
+const SAVED_KEY="driveEasyBookings";
+
+function getSavedBookings(){
+  try{
+    return JSON.parse(localStorage.getItem(SAVED_KEY))||[];
+  }catch{
+    return [];
+  }
+}
+
+function setSavedBookings(bookings){
+  localStorage.setItem(SAVED_KEY,JSON.stringify(bookings));
+}
+
+function saveCurrentBooking(){
+  const bookings=getSavedBookings();
+  const saved={
+    ref:S.ref,
+    type:S.type,
+    car:S.car,
+    pickup:S.pickup,
+    start:S.start,
+    end:S.end,
+    addons:[...S.addons],
+    name:S.name,
+    email:S.email,
+    total:total(),
+    savedAt:new Date().toISOString()
+  };
+
+  const existing=bookings.findIndex(b=>b.ref===saved.ref);
+  if(existing>=0)bookings[existing]=saved;
+  else bookings.unshift(saved);
+
+  setSavedBookings(bookings);
+  renderSavedBookings();
+}
+
+function loadSavedBooking(ref){
+  const b=getSavedBookings().find(x=>x.ref===ref);
+  if(!b)return;
+
+  Object.assign(S,{
+    step:"summary",
+    type:b.type,
+    car:b.car,
+    pickup:b.pickup,
+    start:b.start,
+    end:b.end,
+    addons:[...b.addons],
+    name:b.name,
+    email:b.email,
+    ref:b.ref,
+    fix:true
+  });
+
+  msg("Edit booking "+esc(ref),"user");
+  ask("summary");
+}
+
+function deleteSavedBooking(ref){
+  const bookings=getSavedBookings().filter(b=>b.ref!==ref);
+  setSavedBookings(bookings);
+  renderSavedBookings();
+}
+
+function renderSavedBookings(){
+  const box=$("savedBookings");
+  if(!box)return;
+
+  const bookings=getSavedBookings();
+  box.innerHTML="";
+
+  if(!bookings.length){
+    box.innerHTML="<div class='saved-empty'>Confirmed bookings will appear here.</div>";
+    return;
+  }
+
+  bookings.forEach(b=>{
+    const row=document.createElement("div");
+    row.className="saved-booking";
+    row.innerHTML=`
+      <div class="saved-booking-info">
+        <b>${esc(b.car?.n||"Booking")} · ${money(b.total||0)}</b>
+        <span>${esc(b.ref)}</span>
+        <small>${fmt(b.start)} → ${fmt(b.end)}</small>
+      </div>
+      <div class="saved-booking-actions">
+        <button type="button" class="edit-booking">Edit</button>
+        <button type="button" class="delete-booking">Delete</button>
+      </div>
+    `;
+
+    row.querySelector(".edit-booking").onclick=()=>loadSavedBooking(b.ref);
+    row.querySelector(".delete-booking").onclick=()=>deleteSavedBooking(b.ref);
+
+    box.appendChild(row);
+  });
 }
 
 function spokenDay(s){
@@ -158,7 +268,7 @@ function render(){
     ["type","Vehicle type",S.type],
     ["car","Car",S.car?S.car.n+" · "+money(S.car.r)+"/day":""],
     ["pickup","Pickup location",S.pickup],
-    ["dates","Dates",S.start&&S.end?fmt(S.start)+" → "+fmt(S.end)+" ("+days()+" day"+(days()>1?"s":"")+")":S.start?"From "+fmt(S.start):""],
+    ["dates", "Dates",S.start&&S.end?fmt(S.start)+" → "+fmt(S.end)+" ("+days()+" day"+(days()>1?"s":"")+")":S.start?"From "+fmt(S.start):""],
     ["addons","Add-ons",done("addons")?(S.addons.length?S.addons.map(id=>ADDONS.find(a=>a.id===id).n).join(", "):"None"):""],
     ["driver","Driver",S.email?S.name+" · "+S.email:""]];
   let n=0;
@@ -234,7 +344,8 @@ function ask(step){
 function pickCar(c){S.car=c;msg("I'll take the "+c.n,"user");nextAfter("car")}
 function setDates(a,z){S.start=a;S.end=z;msg(fmt(a)+" to "+fmt(z),"user");nextAfter("dates")}
 function confirmBooking(){
-  S.step="done";S.ref="DE-"+Math.floor(100000+Math.random()*900000);quick([]);render();
+  S.step="done";S.ref=S.ref||"DE-"+Math.floor(100000+Math.random()*900000);quick([]);render();
+  saveCurrentBooking();
   const text=`Your booking is confirmed! Your booking number is ${S.ref}. Total ${money(total())} CAD.`;
   S.last=text;speak(text);
   msg(`<b>Booking number: ${S.ref}</b><br>${esc(S.car.n)} · ${esc(S.pickup)}<br>${fmt(S.start)} → ${fmt(S.end)}<br>Driver: ${esc(S.name)}<br><b>Total: ${money(total())} CAD</b>${priceBreakdown()}`);
@@ -361,3 +472,4 @@ $("back").onclick=goBack;
 $("repeat").onclick=()=>{if(S.last)speak(S.last)};
 $("pause").onclick=()=>{S.paused=!S.paused;if(S.paused){speechSynthesis.cancel();mode("idle")}$("pause").textContent=S.paused?"Resume voice":"Pause voice"};
 welcome(false);
+renderSavedBookings();
