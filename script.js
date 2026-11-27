@@ -163,7 +163,6 @@ function confirmBooking(){
 function welcome(){
   S.step="welcome";quick([]);render();
   msg("Hi! I'm Ava. I'll help you book a rental car. You can <b>talk or type</b> your answers.");
-  msg("<div class='note'><b>Privacy:</b> I only collect your trip details, name and email, so I can set up your booking. Nothing else is collected.</div>");
   speak("Hi! I'm Ava. I'll help you book a rental car. You can talk or type your answers.");
   quick([{l:"Start →",main:true,a:()=>{msg("Start","user");ask("type")}}]);
 }
