@@ -7,13 +7,35 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar">drive easy</header>
+<header class="topbar">
+  <img src="logo.png" alt="drive easy" class="logo">
+  <span>driveEasy</span>
+</header>
 <main class="shell">
-  <section class="panel left">
-    <div class="ava-head">
-      <div id="avatar" data-mode="idle" aria-label="Ava"><span class="eye l"></span><span class="eye r"></span><span class="mouth"></span></div>
-      <div><b>Ava</b><span id="label">Your rental assistant</span></div>
+  <aside class="panel ava-card">
+    <div class="ava-main">
+      <div id="avatar" data-mode="idle" aria-label="Ava">
+        <span class="eye l"></span>
+        <span class="eye r"></span>
+        <span class="mouth"></span>
+      </div>
+      <h2>This is Ava.</h2>
+      <p>Your rental assistant, here to help you book your car step by step.</p>
+      <div class="ava-status">
+        <span class="status-dot"></span>
+        <span id="label">Ready</span>
+      </div>
     </div>
+
+    <div class="ava-divider"></div>
+
+    <section class="previous-bookings" aria-label="Previous bookings">
+      <h3>Previous bookings</h3>
+      <div id="savedBookings" class="saved-bookings"></div>
+    </section>
+  </aside>
+
+  <section class="panel left">
     <div class="chat" id="chat" aria-live="polite"></div>
     <div class="quick" id="quick"></div>
     <div class="bottom">
@@ -30,6 +52,8 @@
       </div>
     </div>
   </section>
+
+
   <aside class="panel right">
     <h2>Your booking</h2>
     <div class="bar"><div id="prog"></div></div>
@@ -38,6 +62,7 @@
     <div class="total"><div><b>Estimated total</b><small id="totalNote">Incl. fees &amp; tax</small></div><strong id="total">$0.00</strong></div>
   </aside>
 </main>
+
 <script src="script.js"></script>
 </body>
 </html>
