@@ -10,19 +10,32 @@ const LOCS=["Oshawa Centre","Whitby – Downtown","Pickering Town Centre","Scarb
 const ADDONS=[{id:"gps",n:"GPS navigation",p:8},{id:"carplay",n:"Apple CarPlay",p:5},{id:"child",n:"Child seat",p:12},{id:"driver",n:"Extra driver",p:15}];
 const ORDER=["type","car","pickup","dates","addons","driver","summary"];
 const MISHEAR={ottawa:"Oshawa Centre"};
+const TERM_FIXES=[
+  [/\b(?:honda\s*)?c\s*r\s*[- ]?\s*v\b/gi,"Honda CR-V"],
+  [/\b(?:honda\s*)?crv\b/gi,"Honda CR-V"],
+  [/\bsee\s+are\s+vee\b/gi,"Honda CR-V"],
+  [/\bsea\s+are\s+vee\b/gi,"Honda CR-V"],
+  [/\bcivic\b/gi,"Honda Civic"],
+  [/\brav\s*4\b/gi,"Toyota RAV4"],
+  [/\brav4\b/gi,"Toyota RAV4"],
+  [/\bf\s*[- ]?\s*150\b/gi,"Ford F-150"],
+  [/\bf one fifty\b/gi,"Ford F-150"]
+];
+
 const S={pre:"",step:"welcome",type:"",car:null,pickup:"",start:"",end:"",addons:[],name:"",email:"",ref:"",paused:false,rec:null,fix:false,last:""};
 const $=id=>document.getElementById(id);
 const chat=$("chat");
 const esc=s=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>"$"+n.toFixed(2);
 const norm=s=>s.toLowerCase().replace(/[–—]/g," ").trim();
+const fixTerms=s=>TERM_FIXES.reduce((v,[pattern,replacement])=>v.replace(pattern,replacement),s);
 
 /* Avatar */
 function mode(m,t){$("avatar").dataset.mode=m;$("label").textContent=t||"Your rental assistant"}
 let VOICE=null;
 function pickVoice(){
   const vs=speechSynthesis.getVoices().filter(v=>v.lang.startsWith("en"));
-  const prefer=["Aria","Jenny","Zira","Samantha","Google UK English Female","Google US English","Hazel","Susan","Karen","Moira","Female"];
+  const prefer=["Microsoft Jenny","Microsoft Aria","Zira","Samantha","Google UK English Female","Google US English","Hazel","Susan","Karen","Moira","Female"];
   for(const p of prefer){const v=vs.find(v=>v.name.includes(p));if(v){VOICE=v;return}}
   VOICE=vs[0]||null;
 }
@@ -34,6 +47,8 @@ function speak(text){
   if(!VOICE)pickVoice();
   if(VOICE)u.voice=VOICE;
   u.pitch=1.1;
+  u.rate=1.3;
+  u.volume=.75;
   u.onstart=()=>mode("talking","Ava is speaking…");
   u.onend=u.onerror=()=>mode("idle");
   speechSynthesis.speak(u);
@@ -65,18 +80,77 @@ function total(){
   const d=days(),extras=S.addons.reduce((a,id)=>a+ADDONS.find(x=>x.id===id).p*d,0),sub=S.car.r*d+extras+15;
   return sub*1.13;
 }
+function priceBreakdown(){
+  if(!S.car)return "";
+  const d=days();
+  const carTotal=S.car.r*d;
+  const addonRows=S.addons.map(id=>{
+    const a=ADDONS.find(x=>x.id===id);
+    return `<div>${esc(a.n)}: ${money(a.p)} × ${d} day${d>1?"s":""} = <b>${money(a.p*d)}</b></div>`;
+  }).join("");
+  const addonsTotal=S.addons.reduce((sum,id)=>{
+    const a=ADDONS.find(x=>x.id===id);
+    return sum+a.p*d;
+  },0);
+  const fees=15;
+  const subtotal=carTotal+addonsTotal+fees;
+  const tax=subtotal*0.13;
+
+  return `
+    <div class="note">
+      <b>Price breakdown</b>
+      <div>${esc(S.car.n)}: ${money(S.car.r)} × ${d} day${d>1?"s":""} = <b>${money(carTotal)}</b></div>
+      ${addonRows||"<div>Add-ons: <b>$0.00</b></div>"}
+      <div>Fees: <b>${money(fees)}</b></div>
+      <div>Tax/HST: <b>${money(tax)}</b></div>
+      <div><b>Total: ${money(subtotal+tax)} CAD</b></div>
+    </div>
+  `;
+}
+
+function spokenDay(s){
+  const words={
+    first:1,second:2,third:3,fourth:4,fifth:5,sixth:6,seventh:7,eighth:8,ninth:9,tenth:10,
+    eleventh:11,twelfth:12,thirteenth:13,fourteenth:14,fifteenth:15,sixteenth:16,seventeenth:17,eighteenth:18,nineteenth:19,
+    twentieth:20,twenty:20,thirtieth:30,thirty:30
+  };
+  if(/^\d{1,2}(st|nd|rd|th)?$/.test(s))return parseInt(s,10);
+  if(words[s])return words[s];
+  const parts=s.split(/\s+/);
+  if(parts.length===2&&words[parts[0]]&&words[parts[1]])return words[parts[0]]+words[parts[1]];
+  return 0;
+}
 function parseDate(s){
-  const x=norm(s),now=new Date();
+  const x=norm(s).replace(/\bthe\b/g," ").replace(/\bof\b/g," ").replace(/\s+/g," ").trim();
+  const now=new Date();
+  const months="jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
+  const monthPattern="jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+
   let m=x.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];
+
+  if(x.includes("day after tomorrow"))return iso(new Date(now.getTime()+2*864e5));
   if(x.includes("tomorrow"))return iso(new Date(now.getTime()+864e5));
   if(x.includes("today"))return iso(now);
-  m=x.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{1,2})/);
-  if(m){const mo="jan feb mar apr may jun jul aug sep oct nov dec".split(" ").indexOf(m[1]);let d=new Date(now.getFullYear(),mo,+m[2]);if(d<now)d.setFullYear(d.getFullYear()+1);return iso(d)}
+
+  m=x.match(new RegExp("\\b("+monthPattern+")\\s+(\\d{1,2}(?:st|nd|rd|th)?|[a-z]+(?:\\s+[a-z]+)?)\\b"));
+  if(!m)m=x.match(new RegExp("\\b(\\d{1,2}(?:st|nd|rd|th)?|[a-z]+(?:\\s+[a-z]+)?)\\s+("+monthPattern+")\\b"));
+  if(m){
+    const monthText=m[1].slice(0,3);
+    const dayText=m[2];
+    const monthFirst=months.includes(monthText);
+    const mo=months.indexOf(monthFirst?monthText:m[2].slice(0,3));
+    const day=spokenDay(monthFirst?dayText:m[1]);
+    if(mo>=0&&day>=1&&day<=31){
+      let d=new Date(now.getFullYear(),mo,day);
+      if(d<now)d.setFullYear(d.getFullYear()+1);
+      return iso(d);
+    }
+  }
+
   const wd=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"].findIndex(v=>x.includes(v));
   if(wd>=0){let diff=(wd-now.getDay()+7)%7;if(diff===0)diff=7;return iso(new Date(now.getTime()+diff*864e5))}
   return "";
 }
-
 /* Status panel */
 function done(k){return {type:!!S.type,car:!!S.car,pickup:!!S.pickup,dates:!!(S.start&&S.end),addons:S.step!=="type"&&ORDER.indexOf(S.step)>4||S.step==="done",driver:!!S.email}[k]}
 function render(){
@@ -152,8 +226,10 @@ function ask(step){
       const x=document.createElement("button");x.className="chip";x.textContent=v;x.onclick=()=>edit(k);c.appendChild(x)});
     b.appendChild(c);
     const t=document.createElement("div");t.style.marginTop="10px";t.innerHTML="<b>Total: "+money(total())+" CAD</b> (incl. fees &amp; tax)";b.appendChild(t);
+    const p=document.createElement("div");p.innerHTML=priceBreakdown();b.appendChild(p);
     quick([{l:"Confirm ✓",main:true,a:confirmBooking},{l:"Change something",a:()=>say("Tap any chip above, or tell me what to change, like “change the dates”.")}]);
   }
+
 }
 function pickCar(c){S.car=c;msg("I'll take the "+c.n,"user");nextAfter("car")}
 function setDates(a,z){S.start=a;S.end=z;msg(fmt(a)+" to "+fmt(z),"user");nextAfter("dates")}
@@ -161,7 +237,7 @@ function confirmBooking(){
   S.step="done";S.ref="DE-"+Math.floor(100000+Math.random()*900000);quick([]);render();
   const text=`Your booking is confirmed! Your booking number is ${S.ref}. Total ${money(total())} CAD.`;
   S.last=text;speak(text);
-  msg(`<b>Booking number: ${S.ref}</b><br>${esc(S.car.n)} · ${esc(S.pickup)}<br>${fmt(S.start)} → ${fmt(S.end)}<br>Driver: ${esc(S.name)}<br><b>Total: ${money(total())} CAD</b>`);
+  msg(`<b>Booking number: ${S.ref}</b><br>${esc(S.car.n)} · ${esc(S.pickup)}<br>${fmt(S.start)} → ${fmt(S.end)}<br>Driver: ${esc(S.name)}<br><b>Total: ${money(total())} CAD</b>${priceBreakdown()}`);
   quick([{l:"Start a new booking",main:true,a:reset}]);
 }
 const GREETING="Hi! I'm Ava. I'll help you book a rental car. You can talk or type your answers.";
@@ -187,12 +263,12 @@ function heard(raw){
   return true;
 }
 function process(text){
-  const raw=text.trim();if(!raw)return;
+  const raw=fixTerms(text.trim());if(!raw)return;
   $("input").value="";msg(esc(raw),"user");quick([]);
   const x=norm(raw);
   if(S.step==="welcome"){S.pre=GREETING;return ask("type")}
   if(x==="restart"||x==="start over")return reset();
-  if(x==="back")return goBack();
+  if(/\b(back|go back|previous|last step|return)\b/.test(x))return goBack();
   if(S.step==="done")return say("Your booking is complete. Tap “Start a new booking” to book another.");
   if(/\b(change|edit|actually)\b/.test(x)&&S.email){
     const map=[["date","dates"],["car","car"],["vehicle","type"],["suv","type"],["sedan","type"],["truck","type"],["minivan","type"],["location","pickup"],["pickup","pickup"],["add","addons"],["gps","addons"],["name","driver"],["email","driver"]];
@@ -266,7 +342,8 @@ function startMic(){
   const r=new SR();S.rec=r;r.lang="en-CA";r.interimResults=true;
   $("mic").classList.add("on");mode("listening","Listening…");
   r.onresult=e=>{
-    const t=Array.from(e.results).map(x=>x[0].transcript).join("");$("input").value=t;
+    const t=fixTerms(Array.from(e.results).map(x=>x[0].transcript).join(""));
+    $("input").value=t;
     if(e.results[e.results.length-1].isFinal){end();process(t)}
   };
   r.onerror=()=>{end();say("I couldn't hear that clearly. Retry the mic or type instead.");quick([{l:"Retry mic",main:true,a:startMic},{l:"Type instead",a:()=>$("input").focus()}])};
