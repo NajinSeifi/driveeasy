@@ -19,10 +19,20 @@ const norm=s=>s.toLowerCase().replace(/[–—]/g," ").trim();
 
 /* Avatar */
 function mode(m,t){$("avatar").dataset.mode=m;$("label").textContent=t||"Your rental assistant"}
+let VOICE=null;
+function pickVoice(){
+  const vs=speechSynthesis.getVoices().filter(v=>v.lang.startsWith("en"));
+  const prefer=["Aria","Jenny","Zira","Samantha","Google UK English Female","Google US English","Hazel","Susan","Karen","Moira","Female"];
+  for(const p of prefer){const v=vs.find(v=>v.name.includes(p));if(v){VOICE=v;return}}
+  VOICE=vs[0]||null;
+}
+if("speechSynthesis" in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
 function speak(text){
   if(!("speechSynthesis" in window)||S.paused)return;
   speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g," "));
+  if(VOICE)u.voice=VOICE;
+  u.pitch=1.1;
   u.onstart=()=>mode("talking","Ava is speaking…");
   u.onend=u.onerror=()=>mode("idle");
   speechSynthesis.speak(u);
