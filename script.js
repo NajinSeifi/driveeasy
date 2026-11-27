@@ -10,7 +10,7 @@ const LOCS=["Oshawa Centre","Whitby – Downtown","Pickering Town Centre","Scarb
 const ADDONS=[{id:"gps",n:"GPS navigation",p:8},{id:"carplay",n:"Apple CarPlay",p:5},{id:"child",n:"Child seat",p:12},{id:"driver",n:"Extra driver",p:15}];
 const ORDER=["type","car","pickup","dates","addons","driver","summary"];
 const MISHEAR={ottawa:"Oshawa Centre"};
-const S={step:"welcome",type:"",car:null,pickup:"",start:"",end:"",addons:[],name:"",email:"",ref:"",paused:false,rec:null,fix:false,last:""};
+const S={pre:"",step:"welcome",type:"",car:null,pickup:"",start:"",end:"",addons:[],name:"",email:"",ref:"",paused:false,rec:null,fix:false,last:""};
 const $=id=>document.getElementById(id);
 const chat=$("chat");
 const esc=s=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -31,6 +31,7 @@ function speak(text){
   if(!("speechSynthesis" in window)||S.paused)return;
   speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g," "));
+  if(!VOICE)pickVoice();
   if(VOICE)u.voice=VOICE;
   u.pitch=1.1;
   u.onstart=()=>mode("talking","Ava is speaking…");
@@ -44,7 +45,10 @@ function msg(html,who="ava"){
   const b=document.createElement("div");b.className="bubble";b.innerHTML=html;
   r.appendChild(b);chat.appendChild(r);chat.scrollTop=chat.scrollHeight;return b;
 }
-function say(text){S.last=text;msg(text);speak(text)}
+function say(text){
+  const spoken=(S.pre?S.pre+" ":"")+text;S.pre="";
+  S.last=spoken;msg(text);speak(spoken);
+}
 function quick(items){
   const q=$("quick");q.innerHTML="";
   items.forEach(i=>{const b=document.createElement("button");b.className="qb"+(i.main?" main":"");b.textContent=i.l;b.onclick=i.a;q.appendChild(b)});
@@ -160,15 +164,17 @@ function confirmBooking(){
   msg(`<b>Booking number: ${S.ref}</b><br>${esc(S.car.n)} · ${esc(S.pickup)}<br>${fmt(S.start)} → ${fmt(S.end)}<br>Driver: ${esc(S.name)}<br><b>Total: ${money(total())} CAD</b>`);
   quick([{l:"Start a new booking",main:true,a:reset}]);
 }
-function welcome(){
-  S.step="welcome";quick([]);render();
+const GREETING="Hi! I'm Ava. I'll help you book a rental car. You can talk or type your answers.";
+function welcome(speakNow){
+  S.step="welcome";quick([]);render();S.last=GREETING;
   msg("Hi! I'm Ava. I'll help you book a rental car. You can <b>talk or type</b> your answers.");
-  speak("Hi! I'm Ava. I'll help you book a rental car. You can talk or type your answers.");
-  quick([{l:"Start →",main:true,a:()=>{msg("Start","user");ask("type")}}]);
+  msg("<div class='note'><b>Privacy:</b> I only collect your trip details, name and email, so I can set up your booking. Nothing else is collected.</div>");
+  if(speakNow)speak(GREETING);
+  quick([{l:"Start →",main:true,a:()=>{msg("Start","user");S.pre=GREETING;ask("type")}}]);
 }
 function reset(){
   Object.assign(S,{type:"",car:null,pickup:"",start:"",end:"",addons:[],name:"",email:"",ref:"",fix:false});
-  chat.innerHTML="";window.speechSynthesis&&speechSynthesis.cancel();mode("idle");welcome();
+  chat.innerHTML="";window.speechSynthesis&&speechSynthesis.cancel();mode("idle");welcome(true);
 }
 
 /* Understanding the user */
@@ -184,7 +190,7 @@ function process(text){
   const raw=text.trim();if(!raw)return;
   $("input").value="";msg(esc(raw),"user");quick([]);
   const x=norm(raw);
-  if(S.step==="welcome"){return ask("type")}
+  if(S.step==="welcome"){S.pre=GREETING;return ask("type")}
   if(x==="restart"||x==="start over")return reset();
   if(x==="back")return goBack();
   if(S.step==="done")return say("Your booking is complete. Tap “Start a new booking” to book another.");
@@ -277,4 +283,4 @@ $("restart").onclick=reset;
 $("back").onclick=goBack;
 $("repeat").onclick=()=>{if(S.last)speak(S.last)};
 $("pause").onclick=()=>{S.paused=!S.paused;if(S.paused){speechSynthesis.cancel();mode("idle")}$("pause").textContent=S.paused?"Resume voice":"Pause voice"};
-welcome();
+welcome(false);
